@@ -41,12 +41,11 @@ def content_filter(response: str) -> dict:
 
     # PII patterns to check
     PII_PATTERNS = {
-        # TODO: Add regex patterns for:
-        # - VN phone number: r"0\d{9,10}"
-        # - Email: r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}"
-        # - National ID (CMND/CCCD): r"\b\d{9}\b|\b\d{12}\b"
-        # - API key pattern: r"sk-[a-zA-Z0-9-]+"
-        # - Password pattern: r"password\s*[:=]\s*\S+"
+        "Phone Number": r"0\d{9,10}",
+        "Email Address": r"[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}",
+        "National ID": r"\b\d{9}\b|\b\d{12}\b",
+        "API Key": r"sk-[a-zA-Z0-9-]{20,}",
+        "Password": r"password\s*[:=]\s*\S+",
     }
 
     for name, pattern in PII_PATTERNS.items():
@@ -97,8 +96,15 @@ If UNSAFE, add a brief reason on the next line.
 #     instruction=SAFETY_JUDGE_INSTRUCTION,
 # )
 
-safety_judge_agent = None  # TODO: Replace with implementation
-judge_runner = None
+safety_judge_agent = llm_agent.LlmAgent(
+    model="gemini-1.5-flash",
+    name="safety_judge",
+    instruction=SAFETY_JUDGE_INSTRUCTION,
+)
+_init_judge()
+judge_runner = runners.InMemoryRunner(
+    agent=safety_judge_agent, app_name="safety_judge"
+)
 
 
 def _init_judge():
@@ -172,16 +178,26 @@ class OutputGuardrailPlugin(base_plugin.BasePlugin):
         if not response_text:
             return llm_response
 
-        # TODO: Implement logic:
         # 1. Call content_filter(response_text)
-        #    - If issues found: replace llm_response.content with redacted version
-        #    - Increment self.redacted_count
-        # 2. If use_llm_judge: call llm_safety_check(response_text)
-        #    - If unsafe: replace llm_response.content with a safe message
-        #    - Increment self.blocked_count
-        # 3. Return llm_response (possibly modified)
+        filter_result = content_filter(response_text)
+        if not filter_result["safe"]:
+            self.redacted_count += 1
+            # Replace logic: modify the content parts
+            new_parts = [types.Part.from_text(text=filter_result["redacted"])]
+            llm_response.content.parts = new_parts
+            # Update response_text for the judge if needed
+            response_text = filter_result["redacted"]
 
-        return llm_response  # TODO: modify if needed
+        # 2. If use_llm_judge: call llm_safety_check(response_text)
+        if self.use_llm_judge:
+            judge_result = await llm_safety_check(response_text)
+            if not judge_result["safe"]:
+                self.blocked_count += 1
+                error_msg = "I'm sorry, I cannot provide that information as it may violate security policies."
+                llm_response.content.parts = [types.Part.from_text(text=error_msg)]
+
+        # 3. Return llm_response (possibly modified)
+        return llm_response
 
 
 # ============================================================

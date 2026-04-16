@@ -55,42 +55,43 @@ class ConfidenceRouter:
 
     def route(self, response: str, confidence: float,
               action_type: str = "general") -> RoutingDecision:
-        """Route a response based on confidence score and action type.
-
-        Args:
-            response: The agent's response text
-            confidence: Confidence score between 0.0 and 1.0
-            action_type: Type of action (e.g., "general", "transfer_money")
-
-        Returns:
-            RoutingDecision with routing action and metadata
-        """
-        # TODO 12: Implement routing logic
-        #
-        # 1. Check if action_type is in HIGH_RISK_ACTIONS
-        #    -> If yes: always escalate (action="escalate", priority="high",
-        #       requires_human=True, reason="High-risk action: {action_type}")
-        #
-        # 2. Check confidence thresholds:
-        #    - confidence >= 0.9:
-        #      action="auto_send", priority="low",
-        #      requires_human=False, reason="High confidence"
-        #
-        #    - 0.7 <= confidence < 0.9:
-        #      action="queue_review", priority="normal",
-        #      requires_human=True, reason="Medium confidence — needs review"
-        #
-        #    - confidence < 0.7:
-        #      action="escalate", priority="high",
-        #      requires_human=True, reason="Low confidence — escalating"
-
-        return RoutingDecision(
-            action="auto_send",
-            confidence=confidence,
-            reason="TODO: implement routing logic",
-            priority="low",
-            requires_human=False,
-        )  # TODO: Replace with implementation
+        """Route a response based on confidence score and action type."""
+        
+        # 1. High_risk_actions always escalate regardless of confidence
+        if action_type in HIGH_RISK_ACTIONS:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason=f"High-risk action: {action_type}",
+                priority="high",
+                requires_human=True,
+            )
+            
+        # 2. Confidence thresholds
+        if confidence >= self.HIGH_THRESHOLD:
+            return RoutingDecision(
+                action="auto_send",
+                confidence=confidence,
+                reason="High confidence",
+                priority="low",
+                requires_human=False,
+            )
+        elif confidence >= self.MEDIUM_THRESHOLD:
+            return RoutingDecision(
+                action="queue_review",
+                confidence=confidence,
+                reason="Medium confidence — needs review",
+                priority="normal",
+                requires_human=True,
+            )
+        else:
+            return RoutingDecision(
+                action="escalate",
+                confidence=confidence,
+                reason="Low confidence — escalating",
+                priority="high",
+                requires_human=True,
+            )
 
 
 # ============================================================
@@ -109,27 +110,27 @@ class ConfidenceRouter:
 hitl_decision_points = [
     {
         "id": 1,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Kiểm Duyệt Giao Dịch Bất Thường (High-Risk Anomaly)",
+        "trigger": "Phát sinh giao dịch chuyển khoản giá trị cực lớn hoặc chuyển ra khỏi khu vực địa lý thông thường (IP lạ).",
+        "hitl_model": "human-in-the-loop",
+        "context_needed": "User profile, lịch sử giao dịch gần nhất, thông tin vị trí IP hiện tại, nội dung phân tích rủi ro của AI Risk Scoring.",
+        "example": "Người dùng đăng nhập từ IP Châu Âu lúc 2h sáng theo múi giờ sở tại và đòi chuyển 500 triệu. AI sẽ BLOCK lại (chặn Request gửi chuyển khoản lên bank_api), nhả về trạng thái Pending. Sau đó đợi hệ thống CSKH con người (Reviewer Level 2) gọi điện xác minh và trực tiếp check lại thông tin, nếu an toàn CSKH mới ấn vào nút [APPROVE] thì tiền mới rời đi.",
     },
     {
         "id": 2,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Phê Duyệt Giải Ngân Khoản Vay Tín Chấp Dưới 20 Triệu",
+        "trigger": "Người dùng yêu cầu vay tiền nhanh trên app và hệ thống tính điểm AI (Credit Scoring) của VinBank chấm khách hàng vượt ngưỡng điểm An toàn Tốt.",
+        "hitl_model": "human-on-the-loop",
+        "context_needed": "Điểm tín dụng CIC / Credit Score, hồ sơ thu nhập hàng tháng (sao kê đóng lương thu thập được) do AI tổng hợp tự động.",
+        "example": "Do tỷ lệ trượt nợ ở khoảng vay 10 triệu cho người có CIC cao là cực hiếm, AI được VinBank cho quyền TỰ ĐỘNG CHẤP THUẬN và giải ngân ngay lập tức đổ tiền về ví khách hàng. TRONG LÚC ĐÓ MÀ SAU KHI LUỒNG ĐÃ ĐI, thông báo sẽ lưu về hàng đợi cho ban Giám sát tín dụng (Hotline Audit). Chuyên viên lôi ngẫu nhiên 5% hồ sơ ra chấm tay, nếu phát hiện lừa đảo thì đánh lùi huỷ quyền cho các lượt thuật toán AI tương lai.",
     },
     {
         "id": 3,
-        "name": "TODO: Name this decision point",
-        "trigger": "TODO: When does this trigger?",
-        "hitl_model": "TODO: human-in-the-loop / human-on-the-loop / human-as-tiebreaker",
-        "context_needed": "TODO: What does the reviewer need to see?",
-        "example": "TODO: Give a concrete example scenario",
+        "name": "Giải Quyết Khiếu Nại Hoàn Tiền Thẻ Quẹt (Chống Phẫn Nộ Mất Khách)",
+        "trigger": "Phân tích Alert chỉ ra người dùng đang bực tức, đe doạ muốn kiện / đòi khoá thẻ do giao dịch máy ATM bị lỗi nuốt tiền (AI không chắc nguyên nhân từ người hay phía bank, confidence score < 0.7).",
+        "hitl_model": "human-as-tiebreaker",
+        "context_needed": "Transcript đoạn chat tranh chấp, cờ đánh dấu thái độ khách hàng phẫn nộ (Aggression Flag), lịch sử thẻ POS và Error Code nội bộ.",
+        "example": "Khách hàng dọa sẽ báo công an gỡ sổ ngân hàng nếu không hoàn lại số tiền 5 triệu quẹt lỗi POS hôm qua. Bởi hành vi Hoàn Tiền là (HIGH-RISK), hơn nữa Cảm xúc khách lại Phẫn Nộ (LOW Confidence cho sự đồng cảm của máy móc). AI LẬP TỨC từ bỏ quyền chat và nhấc TICKET TIE-BREAKER gọi Trưởng Bộ Phận Chăm Sóc Khách Hàng. Chuyên viên con người nhảy vào cướp Frame tiếp tục đoạn chat xoa dịu và xử lý thủ công mã nạp tiền.",
     },
 ]
 
@@ -180,5 +181,8 @@ def test_hitl_points():
 
 
 if __name__ == "__main__":
+    import sys
+    if sys.stdout.encoding.lower() != 'utf-8':
+        sys.stdout.reconfigure(encoding='utf-8')
     test_confidence_router()
     test_hitl_points()
